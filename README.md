@@ -11,23 +11,23 @@ Our project is focused on trending YouTube Video Statistics. YouTube maintains a
 The dataset includes data from videos on YouTube that are within trending category each day in the US and UK regions. There are two kinds of data files, one includes video statistics and the other includes comments.
 
 
-## Video Data: 
-- video_id
--	title
--	channel_title
--	category_id (Can be looked up using the included JSON files, but varies per region)
--	tags (Separated by | character, [none] is displayed if there are no tags)
--	views
--	likes
--	dislikes
--	thumbnail_link
--	date (Formatted like: [day].[month])
+- Video Data: 
+  - video_id
+  -	title
+  -	channel_title
+  -	category_id (Can be looked up using the included JSON files, but varies per region)
+  -	tags (Separated by | character, [none] is displayed if there are no tags)
+  -	views
+  -	likes
+  -	dislikes
+  -	thumbnail_link
+  -	date (Formatted like: [day].[month])
 
-## Comments Data:
--	video_id
--	comment_text
--	likes
--	replies
+- Comments Data:
+  -	video_id
+  -	comment_text
+  -	likes
+  -	replies
 
 
 ## Research Question:
