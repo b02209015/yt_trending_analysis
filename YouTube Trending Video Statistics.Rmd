@@ -1,0 +1,508 @@
+---
+title: "YouTube Trending Video Statistics"
+author: "Shraddha Sutar & Phoebe Hwang"
+date: "5/5/2020"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+
+## Installing Libraries
+```{r}
+
+# Data manipulation
+#install.packages("data.table")
+library(data.table)
+#install.packages("plyr")
+library(plyr)
+#install.packages("dplyr")
+library(dplyr)
+#install.packages("DT")
+library(DT)
+#install.packages("splitstackshape")
+library(splitstackshape)
+#install.packages("reshape")
+library(reshape)
+#install.packages("reshape2")
+library(reshape2)
+#install.packages("tidyverse")
+library(tidyverse)
+
+# Time manipulation
+#install.packages("lubridate")
+library(lubridate)
+
+# Text manipulation
+#install.packages("tidytext")
+library(tidytext)
+
+# Visualization
+#install.packages("ggplot2")
+library(ggplot2)
+#install.packages("plotrix")
+library(plotrix)
+#install.packages("corrplot")
+library(corrplot)
+#install.packages("ggdendro")
+library(ggdendro)
+#install.packages("ggrepel")
+library(ggrepel)
+#install.packages("RColorBrewer")
+library(RColorBrewer)
+
+# Modeling
+#install.packages('randomForest')
+library(randomForest)
+#install.packages('rpart')
+library(rpart)
+#install.packages("caret")
+library(caret)
+#install.packages("e1071")
+library(e1071)
+#install.packages("glmnet")
+library(glmnet)
+#install.packages("pls")
+library(pls)
+#install.packages("gbm")
+library(gbm)
+```
+
+
+
+## Reading data
+```{r}
+
+# Reading the video and category data
+
+videos <- as.data.table(read.csv("USvideos_data.csv"))
+category <- as.data.table(read.csv("USvideo_categories.csv"))
+
+
+# Creating a copy of the dataset
+df <- videos
+```
+
+
+
+## Data Cleaning
+```{r}
+
+# Checking for NAs and duplicate entries in the data
+
+sum(is.na(df)) # No NAs in dataset
+
+df <- df %>% distinct()
+
+
+
+# Adding new columns
+
+df <- df %>% mutate(title_len = nchar(as.character(title)))
+df <- df %>% mutate(tag_len = nchar(as.character(tags)))
+df <- df %>% mutate(desc_len = nchar(as.character(description)))
+df <- df %>% mutate(chan_title_len = nchar(as.character(channel_title)))
+
+df$trending_date <- ydm(df$trending_date)
+df$publish_time <- ymd(substr(df$publish_time, start = 1, stop = 10))
+
+df$day <- weekdays(as.Date(df$publish_time))
+df$month <- months(as.Date(df$publish_time))
+df$year <- format(as.Date(df$publish_time), "%Y")
+
+df2 <- df %>% group_by(video_id)%>%
+        mutate(my_ranks = order(order(trending_date, decreasing = FALSE)))
+
+df2 <- df2 %>% group_by(video_id) %>% mutate(trending_days = max(my_ranks))
+
+
+
+# Merging the videos data to category data to get the category_name
+
+df3 <- merge(x = df2, y = category, by = "category_id", all.x = TRUE)
+
+
+
+# Removing unnecessary columns, checking the structure and changing the data types
+
+df4 <- df3[,-c(1:7,12:16)]
+#str(df4)
+
+df4$day <- as.factor(df4$day)
+df4$month <- as.factor(df4$month)
+df4$year <- as.integer(df4$year)
+
+```
+
+
+
+## Exploratory Data Analysis
+
+Most Viewed Videos
+```{r}
+mvideo <- videos[,.("Total_Views" = round(max(views, na.rm = T), digits = 2)), by = .(title, thumbnail_link)][order(-Total_Views)]
+
+mvideo %>% 
+  mutate(image = paste0('<img width="80%" height="80%" src="', thumbnail_link, '"></img>')) %>% 
+  arrange(-Total_Views) %>% 
+  top_n(20, wt = Total_Views) %>% 
+  select(image, title, Total_Views) %>% 
+  datatable(class = "nowrap hover row-border", escape = FALSE, options = list(dom = 't', scrollX = TRUE, autoWidth = TRUE))
+```
+
+
+Most Liked Videos
+```{r}
+mvideo <- videos[,.("Total_Likes" = round(max(likes, na.rm = T), digits = 2)), by = .(title, thumbnail_link)][order(-Total_Likes)]
+
+mvideo %>% 
+  mutate(image = paste0('<img width="80%" height="80%" src="', thumbnail_link, '"></img>')) %>% 
+  arrange(-Total_Likes) %>% 
+  top_n(20, wt = Total_Likes) %>% 
+  select(image, title, Total_Likes) %>% 
+  datatable(class = "nowrap hover row-border", escape = FALSE, options = list(dom = 't', scrollX = TRUE, autoWidth = TRUE))
+
+```
+
+
+Most Disliked Videos
+```{r}
+mvideo <- videos[,.("Total_Dislikes" = round(max(dislikes,na.rm = T), digits = 2)), by = .(title, thumbnail_link)][order(-Total_Dislikes)]
+
+mvideo %>% 
+  mutate(image = paste0('<img width="80%" height="80%" src="', thumbnail_link, '"></img>')) %>% 
+  arrange(-Total_Dislikes) %>% 
+  top_n(20, wt = Total_Dislikes) %>% 
+  select(image, title, Total_Dislikes) %>% 
+  datatable(class = "nowrap hover row-border", escape = FALSE, options = list(dom = 't', scrollX = TRUE, autoWidth = TRUE))
+```
+
+
+Most Commented Videos
+```{r}
+mvideo <- videos[,.("Total_comments" = round(max(comment_count, na.rm = T), digits = 2)), by = .(title, thumbnail_link)][order(-Total_comments)]
+
+mvideo %>% 
+  mutate(image = paste0('<img width="80%" height="80%" src="', thumbnail_link, '"></img>')) %>% 
+  arrange(-Total_comments) %>% 
+  top_n(20, wt = Total_comments) %>% 
+  select(image, title, Total_comments) %>%
+  datatable(class = "nowrap hover row-border", escape = FALSE, options = list(dom = 't', scrollX = TRUE, autoWidth = TRUE))
+```
+
+
+Top Trending Channels
+```{r}
+ggplot(videos[, .N, by = channel_title][order(-N)][1:10], aes(reorder(channel_title, N), N, fill = channel_title)) + geom_bar(stat = "identity", fill = "#336766", width = 0.8) + geom_label(aes(label = N), fill = "white") + guides(fill = "none") + theme(axis.text.x = element_text(hjust = 1)) + labs(title = " Top Trending Channels") + xlab(NULL) + ylab(NULL) + coord_flip()
+```
+
+
+Title Bigrams
+```{r}
+biga <- unnest_tokens(videos,bigram, title, token = "ngrams", n = 2)
+biga <- as.data.table(biga)
+
+ggplot(biga[, .N, by = bigram][order(-N)][1:20], aes(reorder(bigram, -N), N, fill = bigram)) + geom_bar(stat = "identity", fill = "#47709F", width = 0.7) + guides(fill = "none") + theme(axis.text.x = element_text(angle = 45, hjust = 1)) + labs(title = "Top Title bigrams") + xlab(NULL) + ylab(NULL)
+```
+
+
+Top Category ID
+```{r}
+ggplot(videos[, .N, by = category_id][order(-N)], aes(reorder(category_id, -N), N, fill = as.factor(category_id))) + geom_bar(stat = "identity") + guides(fill = "none") + labs(title = " Top Category ID") + xlab(NULL) + ylab(NULL)
+```
+
+
+How much time passed between published and trending?
+```{r}
+videos$trending_date <- ydm(videos$trending_date)
+videos$publish_time <- ymd(substr(videos$publish_time,start = 1,stop = 10))
+videos$dif_days <- videos$trending_date-videos$publish_time
+
+ggplot(videos[dif_days <= 31], aes(as.factor(dif_days), fill = as.factor(dif_days))) + geom_bar(fill = "#B3B8E4") + guides(fill = "none") + labs(title = "Number of Days It Takes to Start Trending") + xlab("days") + ylab(NULL)
+```
+
+
+Average trending days by category
+```{r}
+avg.day <- aggregate(df4$trending_days, list(df4$category_name), mean)
+avg.day
+
+bar.dat <- barplot(avg.day$x, names.arg = avg.day$Group.1, ylab = "Trending Days",
+                   ylim = c(0, 20), col = rgb(0.2, 0.4, 0.6, 0.6), las = 2, border = FALSE)
+bar.dat
+```
+
+
+Relationship between categories and days of the week
+```{r}
+cat.day <- count(df4, day, category_name)
+cat.day
+
+ggplot(cat.day, aes(day, category_name, fill = n)) + geom_tile() + scale_fill_gradient(low = "#FEF5E7", high = "#CD5C5C", name = NULL)
+```
+
+
+Relationship between categories and days of the week
+```{r}
+cat.m <- count(df4, month, category_name)
+cat.m
+
+ggplot(cat.m, aes(month, category_name, fill = n)) + geom_tile() + scale_fill_gradient(low = "#E8F6F3", high = "#2471A3", name = NULL) + theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+
+
+## Creating test train dataset
+```{r}
+
+set.seed(1)
+train <- sample(nrow(df4), nrow(df4)*0.4)
+df.train <- df4[train, ]
+df.test <- df4[-train, ]
+
+# selecting only first day data for the test data, as discussed in the report
+df.test <- subset(df.test, my_ranks == 1)
+
+# checking structure of the data
+str(df.train)
+str(df.test)
+
+# removing ranks columns
+df.train <- df.train[,-c(12)]
+df.test <- df.test[,-c(12)]
+```
+
+
+
+## Modeling
+# 1st Iteration - all variables
+
+
+Linear Regression
+```{r}
+set.seed(1)
+fit.lm <- lm(trending_days ~ ., data = df.train)
+summary(fit.lm)
+```
+
+
+Logistic Regression
+```{r}
+# 1st iteration
+set.seed(1)
+fit.log <- glm(trending_days ~ ., data = df.train)
+pred.log <- predict(fit.log, df.test)
+err.log <- mean((df.test$trending_days - pred.log)^2)
+#err.log
+```
+
+
+Lasso
+```{r}
+# 1st iteration
+set.seed(1)
+mat.train <- model.matrix(trending_days ~., data = df.train)
+mat.test <- model.matrix(trending_days ~ ., data = df.test)
+
+grid <- 10^ seq (10,-2, length =100)
+fit.lasso <- cv.glmnet(mat.train, as.numeric(df.train$trending_days), alpha = 1, lambda = grid)
+lam.best.lasso <- fit.lasso$lambda.min
+
+pred.lasso <- predict(fit.lasso, s = lam.best.lasso, newx = mat.test, type = "response")
+err.lasso <- mean((as.numeric(df.test$trending_days) - pred.lasso)^2)
+#err.lasso
+summary(fit.lasso)
+
+```
+
+
+Ridge
+```{r}
+# 1st iteration
+set.seed(1)
+ridge.fit <- glmnet(mat.train, as.numeric(df.train$trending_days), alpha = 0, lambda = grid)
+cvridge_out <- cv.glmnet(mat.train, as.numeric(df.train$trending_days), alpha = 0, lambda = grid)
+bestridge <- cvridge_out$lambda.min
+#bestridge
+ridge.pred <- predict(ridge.fit, s = bestridge, newx = mat.test)
+err.ridge <- mean((ridge.pred - as.numeric(df.test$trending_days))^2)
+#err.ridge
+```
+
+
+Random Forest
+```{r}
+# 1st iteration
+set.seed(1)
+fit.rf <- randomForest(trending_days ~ ., data = df.train)
+pred.rf <- predict(fit.rf, df.test)
+err.rf <- mean((df.test$trending_days - pred.rf)^2)
+#err.rf
+
+# Variable Importance and its plot
+importance(fit.rf)        
+varImpPlot(fit.rf)
+```
+
+
+SVM 
+```{r}
+# 1st iteration
+set.seed(1)
+fit.svm <- svm(trending_days ~ ., kernel = "linear", data = df.train)
+pred.svm <- predict(fit.svm, df.test)
+err.svm <- mean((df.test$trending_days - pred.svm)^2)
+#err.svm
+```
+
+
+Boosting
+```{r}
+# 1st iteration
+set.seed(1)
+fit.boost <- gbm(trending_days ~ ., data = df.train, n.trees = 100)
+pred.boost <- predict(fit.boost, df.test, n.trees = 100)
+err.boost <- mean((df.test$trending_days - pred.boost)^2)
+#err.boost
+```
+
+
+
+# 2nd Iteration - with selected features
+
+
+Logistic Regression
+```{r}
+# 2nd iteration
+set.seed(1)
+fit.log2 <- glm(trending_days ~ . - views - chan_title_len - dislikes - tag_len - desc_len, data = df.train)
+pred.log2 <- predict(fit.log2, df.test)
+err.log2 <- mean((df.test$trending_days - pred.log2)^2)
+#err.log2
+```
+
+
+Lasso
+```{r}
+# 2nd iteration
+set.seed(1)
+mat.train2 <- model.matrix(trending_days~.-views-chan_title_len-dislikes-tag_len-desc_len,data=df.train)
+mat.test2 <- model.matrix(trending_days~.-views-chan_title_len-dislikes-tag_len-desc_len,data=df.test)
+
+fit.lasso2 <- cv.glmnet(mat.train2, as.numeric(df.train$trending_days), alpha = 1, lambda = grid)
+lam.best.lasso2 <- fit.lasso2$lambda.min
+pred.lasso2 <- predict(fit.lasso2, s = lam.best.lasso2, newx = mat.test2, type = "response")
+err.lasso2 <- mean((as.numeric(df.test$trending_days) - pred.lasso2)^2)
+#err.lasso2
+summary(fit.lasso2)
+```
+
+
+Ridge
+```{r}
+# 2nd iteration
+set.seed(1)
+ridge.fit2 <- glmnet(mat.train2, as.numeric(df.train$trending_days), alpha = 0, lambda = grid)
+cvridge_out2 <- cv.glmnet(mat.train2, as.numeric(df.train$trending_days), alpha = 0, lambda = grid)
+bestridge2 <- cvridge_out2$lambda.min
+#bestridge2
+ridge.pred2 <- predict(ridge.fit2, s = bestridge2, newx = mat.test2)
+err.ridge2 <- mean((ridge.pred2 - as.numeric(df.test$trending_days))^2)
+#err.ridge2
+```
+
+
+Random Forest
+```{r}
+# 2nd iteration
+set.seed(1)
+fit.rf2 <- randomForest(trending_days ~ . - views - chan_title_len - dislikes - tag_len - desc_len, data = df.train)
+pred.rf2 <- predict(fit.rf2, df.test)
+err.rf2 <- mean((df.test$trending_days - pred.rf2)^2)
+#err.rf2
+
+importance(fit.rf2)        
+varImpPlot(fit.rf2)
+```
+
+
+SVM 
+```{r}
+# 2nd iteration
+set.seed(1)
+fit.svm2 <- svm(trending_days ~ . - views - chan_title_len - dislikes - tag_len - desc_len, kernel = "linear", data = df.train)
+pred.svm2 <- predict(fit.svm2, df.test)
+err.svm2 <- mean((df.test$trending_days - pred.svm2)^2)
+#err.svm2
+```
+
+
+Boosting
+```{r}
+# 2nd iteration
+set.seed(1)
+fit.boost2 <- gbm(trending_days ~ . - views - chan_title_len - dislikes - tag_len - desc_len, data = df.train, n.trees = 100)
+pred.boost2 <- predict(fit.boost2, df.test, n.trees = 100)
+err.boost2 <- mean((df.test$trending_days - pred.boost2)^2)
+#err.boost2
+```
+
+
+
+## Test Error Rates
+```{r}
+# 1st iteration
+r.ridge = 100 - err.ridge
+r.lasso = 100 - err.lasso
+r.log = 100 - err.log
+r.rf = 100 - err.rf
+r.boost = 100 - err.boost
+r.svm = 100 - err.svm
+
+
+# 2nd iteration
+r2.ridge = 100 - err.ridge2
+r2.lasso = 100 - err.lasso2
+r2.log = 100 - err.log2
+r2.rf = 100 - err.rf2
+r2.boost = 100 - err.boost2
+r2.svm = 100 - err.svm2
+
+
+data.accuracy <- data.frame(Model = c("Ridge", "Lasso", "LR", "RF", "Boosting", "SVM"),
+                            Accuracy = c(r.ridge, r.lasso, r.log, r.rf, r.boost, r.svm),
+                            Accuracy2 = c(r2.ridge, r2.lasso, r2.log, r2.rf, r2.boost, r2.svm))
+data.accuracy
+```
+
+
+
+## Plot accuracies
+```{r}
+bar.accuracy <- barplot(c(r.ridge, r.lasso, r.log, r.rf, r.boost, r.svm), names.arg = c("Ridge", "Lasso", "Logistic\nRegression", "Random\nForest", "Boosting", "SVM"), ylim = c(0, 100), col = brewer.pal(6, "RdGy"))
+
+bar.accuracy
+```
+
+
+
+## Plot accuracies for both iteration
+```{r}
+Models <- c(rep("Ridge", 2), rep("Lasso", 2), rep("Logistic\nRegression", 2), rep("Random\nForest", 2), rep("Boosting", 2), rep("SVM", 2))
+
+Rates <- rep(c("Accuracy", "Accuracy2"))
+
+Accuracy <- c(r.ridge, r2.ridge, r.lasso, r2.lasso, r.log, r2.log, r.rf, r2.rf, r.boost, r2.boost, r.svm, r2.svm)
+
+val.acc <- data.frame(Models, Rates, Accuracy)
+
+ggplot(val.acc, aes(x = Models, y = Accuracy, fill = Rates)) +
+  geom_bar(position = "dodge", stat = "identity") + scale_color_brewer(palette = "RdGy")
+```
+
+
+
+
+
+
+
