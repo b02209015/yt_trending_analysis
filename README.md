@@ -1,4 +1,4 @@
-# YouTube Trending Videos Statistics
+# YouTube Trending Videos Analysis
 
 Authors: Phoebe Hwang, Shraddha Sutar
 
