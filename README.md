@@ -1,6 +1,6 @@
 # YouTube Trending Videos Statistics
 
-### Authors: Phoebe Hwang, Shraddha Sutar
+Authors: Phoebe Hwang, Shraddha Sutar
 
 
 ## Background
