@@ -1,7 +1,5 @@
 # YouTube Trending Videos Analysis
 
-Authors: Phoebe Hwang, Shraddha Sutar
-
 
 ## Background
 Our project is focused on trending YouTube Video Statistics. YouTube maintains a list of the top trending videos on the platform to YouTube using a combination of factors including measuring users’ interactions (number of views, shares, comments and likes). The dataset is a daily record of the top trending YouTube videos. This dataset includes several months of data on daily trending YouTube videos. Data is included for the USA, Great Britain, Germany, Canada, France, Russia, Mexico, South Korea, Japan and India, with up to 200 listed trending videos per day.
